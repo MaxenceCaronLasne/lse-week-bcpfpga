@@ -1,0 +1,36 @@
+#+TITLE: Accelerate Boolean Constraint Propagation for Boolean Satisfiability Solvers with FPGA
+
+* TODO Get all sources on this computer
+
+* TODO Get and revamp old presentation
+
+[ ] Get presentation
+[ ] Get it in LaTeX
+[ ] Remove second implementation
+
+* TODO Why cache?
+
+[ ] Clock gain
+
+* TODO MiniSAT and cache simulation
+
+[ ] Show MiniSAT propagate()
+[ ] Show Cache design
+
+* TODO Results on SAT competitions benchmarks
+
+[ ] Get benchmarks
+[ ] Create good graphs
+  
+* TODO Results on angr (z3)
+
+[ ] What is angr?
+[ ] What is z3?
+[ ] Problem
+
+* TODO Results on KLEE (STP)
+
+[ ] What is KLEE?
+[ ] What is STP?
+[ ] Get more benchmarks
+[ ] Create good graphs
