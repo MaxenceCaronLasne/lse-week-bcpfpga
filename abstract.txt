@@ -1,0 +1,17 @@
+Title: Accelerate Boolean Constraint Propagation for
+       Boolean Satisfiability Solvers with FPGA
+
+Abstract:
+
+Boolean Satisfiability (or SAT) problem is the problem of finding if a 
+set of boolean values that satisfies a given boolean formula exists.
+SAT, even if it is the first problem proven NP-complete, is used in
+fields like circuit design and automatic theorem proving.
+
+The algorithm used to solve SAT problems is arborescent but the most
+time consuming operation used in it, the Boolean Constraint
+Propagation (BCP), is a good target for hardware acceleration.
+
+Based on the work of John D. Davis, we will explore a BCP co-processor
+design for FPGA. We will also see some possible techniques to improve
+this design: Content Addressable Memory (CAM) and caching.
