@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Accelerate Boolean Constraint Propagation for Boolean Satisfiability Solvers with FPGA</title>
+<meta name="author" content="(Maxence CARON--LASNE)"/>
+<style type="text/css">
+.underline { text-decoration: underline; }
+</style>
+<link rel="stylesheet" href="./reveal.js/css/reveal.css"/>
+
+<link rel="stylesheet" href="./reveal.js/css/theme/white.css" id="theme"/>
+
+<link rel="stylesheet" href="./local.css"/>
+
+<!-- If the query includes 'print-pdf', include the PDF print sheet -->
+<script>
+    if( window.location.search.match( /print-pdf/gi ) ) {
+        var link = document.createElement( 'link' );
+        link.rel = 'stylesheet';
+        link.type = 'text/css';
+        link.href = './reveal.js/css/print/pdf.css';
+        document.getElementsByTagName( 'head' )[0].appendChild( link );
+    }
+</script>
+<meta name="description" content="Implementing Boolean Constraint Propagation on FPGA"
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+<section id="sec-title-slide"><h1>Accelerate Boolean Constraint Propagation for Boolean Satisfiability Solvers with FPGA</h1>
+<h3>Maxence CARON&#x2013;LASNE</h3>
+<h4><a href="mailto:maxence.caron-lasne@lse.epita.fr">maxence.caron-lasne@lse.epita.fr</a></h4>
+</section>
+<section id="table-of-contents">
+<div id="table-of-contents">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents">
+<ul>
+<li><a href="#/slide-orgbfac0b5">Satifiability problems and Boolean Constraint Propagation</a></li>
+<li><a href="#/slide-org09785ed">Hardware acceleration?</a></li>
+<li><a href="#/slide-org4bc9a9b">General BCP Algorithm</a></li>
+<li><a href="#/slide-orgc6b2975">Many Inference Engines design</a></li>
+<li><a href="#/slide-org7daa9f5">Possible optimisation</a></li>
+<li><a href="#/slide-org731f45d">Cache results on SAT competitions benchmarks</a></li>
+<li><a href="#/slide-org4838f84">Cache results for specialized SAT problems</a></li>
+<li><a href="#/slide-org3ccd0a7">Conclusion</a></li>
+</ul>
+</div>
+</div>
+</section>
+
+<section>
+<section id="slide-orgbfac0b5">
+<h2 id="orgbfac0b5">Satifiability problems and Boolean Constraint Propagation</h2>
+<div class="outline-text-2" id="text-orgbfac0b5">
+</div>
+</section>
+</section>
+<section>
+<section id="slide-org0857b69">
+<h3 id="org0857b69">Satisfiability problems</h3>
+<p>
+Find if a set of values satisfies a given Boolean equation.
+</p>
+
+<p>
+Some examples:
+</p>
+
+
+<div class="figure">
+<p><object type="image/svg+xml" data="./images/sat_example.svg" class="org-svg" width="70%" height="70%">
+Sorry, your browser does not support SVG.</object>
+</p>
+</div>
+
+</section>
+</section>
+<section>
+<section id="slide-org00d1325">
+<h4 id="org00d1325">Usecases</h4>
+<ul>
+<li>SMT solvers</li>
+<li>Symbolic execution</li>
+<li>Formal verification</li>
+<li>Circuit synthesis</li>
+<li>&#x2026;</li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-orgf3c5a6c">
+<h3 id="orgf3c5a6c">Conjunctive Normal Form</h3>
+
+<div class="figure">
+<p><object type="image/svg+xml" data="./images/cnf_example.svg" class="org-svg" width="100%" height="100%">
+Sorry, your browser does not support SVG.</object>
+</p>
+</div>
+
+<ul>
+<li>Clauses are composed of literals.</li>
+<li>Literals are variables with a sign.</li>
+<li>Clause size are not fix.</li>
+<li>We tend to normalize the clause's size (3, 4, 16&#x2026;).</li>
+<li>3-SAT, 4-SAT, k-SAT.</li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-orga19adf0">
+<h3 id="orga19adf0">DPLL algorithm</h3>
+<p>
+Davis-Putman-Logemann-Loveland algorithm.
+</p>
+
+<ul>
+<li>Backtracking-based.</li>
+
+</ul>
+
+<pre  class="example">
+def DPLL(CLAUSES):
+        if CLAUSES is a consistant set of literals:
+                return SAT
+
+        if CLAUSES contains an empty clause:
+                return UNSAT
+
+        for every unit clause U in CLAUSES:
+                CLAUSES = unit-propagate(U, CLAUSES)
+
+        for every literal L that occurs pure in CLAUSES:
+                CLAUSES = pure-literal-assign(L, CLAUSES)
+
+        L = choose-literal(CLAUSES)
+
+        return DPLL(CLAUSES and L) or DPLL(CLAUSES and not L)
+</pre>
+
+</section>
+</section>
+<section>
+<section id="slide-orgab97105">
+<h4 id="orgab97105">DPLL example</h4>
+
+<div class="figure">
+<p><img src="./images/dpll_example_2.png" alt="dpll_example_2.png" />
+</p>
+</div>
+
+<p>
+By Tamkin04iut - asdfasf Previously published: asdfasf, CC BY-SA 3.0, <a href="https://commons.wikimedia.org/w/index.php?curid=25661587">https://commons.wikimedia.org/w/index.php?curid=25661587</a>
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org492cc39">
+<h4 id="org492cc39">DPLL example</h4>
+
+<div class="figure">
+<p><img src="./images/dpll_example.png" alt="dpll_example.png" />
+</p>
+</div>
+
+<p>
+By Tamkin04iut - asdfasf Previously published: asdfasf, CC BY-SA 3.0, <a href="https://commons.wikimedia.org/w/index.php?curid=25661587">https://commons.wikimedia.org/w/index.php?curid=25661587</a>
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org89e89e2">
+<h3 id="org89e89e2">Boolean Constraint Propagation</h3>
+<p>
+Also called unit-propagation.
+</p>
+
+<p>
+In a clause, if all literals but one are assigned and false, the last literal must
+be assigned to true to satisfies the clause.
+</p>
+
+
+<div class="figure">
+<p><object type="image/svg+xml" data="./images/unit_1.svg" class="org-svg" width="50%" height="50%" background="none">
+Sorry, your browser does not support SVG.</object>
+</p>
+</div>
+
+</section>
+</section>
+<section>
+<section id="slide-orgbf24e42">
+<h4 id="orgbf24e42">Cascade effect</h4>
+<p>
+BCP implies a variable value.
+</p>
+
+<ul>
+<li>So, no choice to make.</li>
+<li>Free implication.</li>
+<li>Free infered variable.</li>
+
+</ul>
+
+<p>
+So we can see "cascades" of propagation.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org1402a5b">
+<h4 id="org1402a5b">Example of cascade effect</h4>
+
+<div class="figure">
+<p><object type="image/svg+xml" data="./images/unit_2.svg" class="org-svg" width="70%" height="70%">
+Sorry, your browser does not support SVG.</object>
+</p>
+</div>
+
+<p>
+We cannot imply anything for d and e.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org09785ed">
+<h2 id="org09785ed">Hardware acceleration?</h2>
+<div class="outline-text-2" id="text-org09785ed">
+</div>
+</section>
+</section>
+<section>
+<section id="slide-orgb089538">
+<h3 id="orgb089538">Is BCP worth accelerating?</h3>
+<ul>
+<li>BCP is part of any software SAT solvers.</li>
+<li>BCP is useful to prune branches.</li>
+<li>BCP takes 80%-90% of CPU time because of cascades of implications.</li>
+
+</ul>
+
+<p>
+This part of the algorithm is worth accelerating.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orgfe7facc">
+<h3 id="orgfe7facc">What is an FPGA?</h3>
+<p>
+Field Programmable Gate Array.
+</p>
+
+<ul>
+<li>Array of programmable logic blocks (gate).</li>
+<li>Logic blocks can be wired together.</li>
+<li>User can implements complex logic function and synthetise it on FPGA.</li>
+
+</ul>
+
+<p>
+FPGA is by nature highly parallel, so it can be faster for some tasks.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org790db42">
+<h3 id="org790db42">Why FPGA?</h3>
+<ul>
+<li>The DPLL algorithm is a branching algorithm.</li>
+<li>The BCP is a simple operation executed many times.</li>
+
+</ul>
+
+<p>
+Divide the work between two chips may be worth.
+</p>
+
+<ul>
+<li>Branching algorithm: CPU</li>
+<li>Little operation with many workers: FPGA</li>
+
+</ul>
+
+
+
+<div class="figure">
+<p><img src="./images/cpu_to_fpga.png" alt="cpu_to_fpga.png" width="50%" height="50%" />
+</p>
+</div>
+
+</section>
+</section>
+<section>
+<section id="slide-org4bc9a9b">
+<h2 id="org4bc9a9b">General BCP Algorithm</h2>
+<div class="outline-text-2" id="text-org4bc9a9b">
+</div>
+</section>
+</section>
+<section>
+<section id="slide-org15e279d">
+<h3 id="org15e279d">General BCP Algorithm</h3>
+<p>
+Deducts variable values from input values
+</p>
+
+
+<div class="figure">
+<p><img src="./images/io.png" alt="io.png" />
+</p>
+</div>
+
+<p>
+Algorithm:
+</p>
+<ol>
+<li>Fetch list of clauses</li>
+<li>Fetch variable assignments</li>
+<li>Verify if the clause is an unit clause</li>
+<li>Update assignments</li>
+
+</ol>
+
+</section>
+</section>
+<section>
+<section id="slide-orgc6b2975">
+<h2 id="orgc6b2975">Many Inference Engines design</h2>
+<div class="outline-text-2" id="text-orgc6b2975">
+</div>
+</section>
+</section>
+<section>
+<section id="slide-orgf4ea017">
+<h3 id="orgf4ea017">Many Inference Engines design</h3>
+<p>
+J. D. Davis, Zhangxi Tan, Fang Yu and Lintao Zhang, "A practical reconfigurable hardware accelerator for boolean satisfiability solvers"
+</p>
+
+
+<div class="figure">
+<p><img src="./images/total_project.png" alt="total_project.png" />
+</p>
+</div>
+
+</section>
+</section>
+<section>
+<section id="slide-org324246d">
+<h3 id="org324246d">Inference engine</h3>
+
+<div class="figure">
+<p><img src="./images/infengine.png" alt="infengine.png" />
+</p>
+</div>
+
+</section>
+</section>
+<section>
+<section id="slide-org362a380">
+<h4 id="org362a380">Clause partitionning</h4>
+<p>
+Each Inference Engine has only one occurence of a single variable.
+</p>
+
+<p>
+At each BCP, a single Inference Engine can only find a single inference.
+</p>
+
+<p>
+So the Inference Engine find the inference in a fixed number of clock cycles.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org1072d95">
+<h3 id="org1072d95">Clause fetching</h3>
+<ul>
+<li>Naive solution: just an array.</li>
+
+</ul>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-right" />
+
+<col  class="org-left" />
+</colgroup>
+
+<colgroup>
+<col  class="org-right" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-right">Index</th>
+<th scope="col" class="org-left">Match</th>
+<th scope="col" class="org-right">Index</th>
+<th scope="col" class="org-left">Match</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-right">0000</td>
+<td class="org-left">No Match</td>
+<td class="org-right">1000</td>
+<td class="org-left">No Match</td>
+</tr>
+
+<tr>
+<td class="org-right">0001</td>
+<td class="org-left">CID: 1; PID: 1</td>
+<td class="org-right">1001</td>
+<td class="org-left">No Match</td>
+</tr>
+
+<tr>
+<td class="org-right">0010</td>
+<td class="org-left">No Match</td>
+<td class="org-right">1010</td>
+<td class="org-left">No Match</td>
+</tr>
+
+<tr>
+<td class="org-right">0011</td>
+<td class="org-left">No Match</td>
+<td class="org-right">1011</td>
+<td class="org-left">No Match</td>
+</tr>
+
+<tr>
+<td class="org-right">0100</td>
+<td class="org-left">No Match</td>
+<td class="org-right">1100</td>
+<td class="org-left">CID: 2; PID: 1</td>
+</tr>
+
+<tr>
+<td class="org-right">0101</td>
+<td class="org-left">No Match</td>
+<td class="org-right">1101</td>
+<td class="org-left">CID: 2; PID: 2</td>
+</tr>
+
+<tr>
+<td class="org-right">0110</td>
+<td class="org-left">No Match</td>
+<td class="org-right">1110</td>
+<td class="org-left">CID: 1; PID: 2</td>
+</tr>
+
+<tr>
+<td class="org-right">0111</td>
+<td class="org-left">No Match</td>
+<td class="org-right">1111</td>
+<td class="org-left">No Match</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+</section>
+<section>
+<section id="slide-orge8ee55b">
+<h3 id="orge8ee55b">Clause fetching</h3>
+<p>
+Problem: the array is too sparse.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org4a18105">
+<h4 id="org4a18105">Clause tree walking</h4>
+
+<div class="figure">
+<p><img src="./images/clause_trie.png" alt="clause_trie.png" />
+</p>
+</div>
+
+
+</section>
+</section>
+<section>
+<section id="slide-orgc5abeaf">
+<h4 id="orgc5abeaf">Trie memory representation</h4>
+<p>
+The data is less sparse.
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-right" />
+
+<col  class="org-left" />
+</colgroup>
+
+<colgroup>
+<col  class="org-right" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-right">Index</th>
+<th scope="col" class="org-left">Match</th>
+<th scope="col" class="org-right">Index</th>
+<th scope="col" class="org-left">Match</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-right">0000</td>
+<td class="org-left">Base index: 0100</td>
+<td class="org-right">0110</td>
+<td class="org-left">No Match</td>
+</tr>
+
+<tr>
+<td class="org-right">0001</td>
+<td class="org-left">No Match</td>
+<td class="org-right">0111</td>
+<td class="org-left">No Match</td>
+</tr>
+
+<tr>
+<td class="org-right">0010</td>
+<td class="org-left">No Match</td>
+<td class="org-right">1000</td>
+<td class="org-left">CID: 2; PID: 1</td>
+</tr>
+
+<tr>
+<td class="org-right">0011</td>
+<td class="org-left">Base index: 1000</td>
+<td class="org-right">1001</td>
+<td class="org-left">CID: 2; PID: 2</td>
+</tr>
+
+<tr>
+<td class="org-right">0100</td>
+<td class="org-left">No Match</td>
+<td class="org-right">1010</td>
+<td class="org-left">CID: 1; PID: 2</td>
+</tr>
+
+<tr>
+<td class="org-right">0101</td>
+<td class="org-left">CID: 1; PID: 1</td>
+<td class="org-right">1011</td>
+<td class="org-left">No Match</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+</section>
+<section>
+<section id="slide-orgabdc308">
+<h3 id="orgabdc308">Clause status fetching</h3>
+<ul>
+<li>A clause is identified with its CID.</li>
+<li>Putting clause status in an array is OK.</li>
+
+</ul>
+
+<pre  class="example">
+Address CID: [status0][status1][status2]...[status(n-1)]
+
+Status:
+00: false
+01: true
+10: unassigned
+</pre>
+
+</section>
+</section>
+<section>
+<section id="slide-org38157b2">
+<h3 id="org38157b2">Inference computation</h3>
+<pre  class="example">
+00 00 00 00 10 00 00 00
+___________    ________
+  HI(i)      i   LO(i)
+
+is_implication(i) = HI(i) == LO(i) == 0 and lit(i) == unassigned
+</pre>
+
+<pre  class="example">
+for i in sizeof(clause_entry):
+    ret[i] = clause[:i] == 0 and clause[i+1:] == 0 and clause[i] == UNASSIGN
+</pre>
+
+<ul>
+<li>It is a combinational operation, it is done in one clock cycle.</li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-org52269d6">
+<h3 id="org52269d6">Results</h3>
+<p>
+250 MHz
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+</colgroup>
+
+<colgroup>
+<col  class="org-right" />
+</colgroup>
+
+<colgroup>
+<col  class="org-right" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">SAT Instance</th>
+<th scope="col" class="org-right">Clause-Variable Ratio</th>
+<th scope="col" class="org-right">Number of clock cycles</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">miters-c3540</td>
+<td class="org-right">2.70</td>
+<td class="org-right">7</td>
+</tr>
+
+<tr>
+<td class="org-left">miters-c5315</td>
+<td class="org-right">2.96</td>
+<td class="org-right">9</td>
+</tr>
+
+<tr>
+<td class="org-left">miters-c880</td>
+<td class="org-right">5.08</td>
+<td class="org-right">12</td>
+</tr>
+
+<tr>
+<td class="org-left">bmc-galileo-8</td>
+<td class="org-right">5.08</td>
+<td class="org-right">5</td>
+</tr>
+
+<tr>
+<td class="org-left">bmc-ibm-12</td>
+<td class="org-right">4.67</td>
+<td class="org-right">6</td>
+</tr>
+
+<tr>
+<td class="org-left">crypto-md4</td>
+<td class="org-right">4.16</td>
+<td class="org-right">10</td>
+</tr>
+
+<tr>
+<td class="org-left">crypto-md5</td>
+<td class="org-right">4.17</td>
+<td class="org-right">11</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+Supports up to 64,000 variables and clauses.
+</p>
+
+<p>
+x5 to x16 speedup relative to contemporary SAT Solvers.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org7daa9f5">
+<h2 id="org7daa9f5">Possible optimisation</h2>
+<p>
+The clause fetching may be optimised.
+</p>
+
+<ul>
+<li>Content Addressable Memory?</li>
+<li>Cache?</li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-org27d9ab8">
+<h3 id="org27d9ab8">Why cache?</h3>
+<p>
+Cache the upcomming variable's clause.
+</p>
+
+<p>
+Some clock cycles can be skipped if cache hit.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orgaf96d95">
+<h3 id="orgaf96d95">Is it worth it?</h3>
+<p>
+It is if we have a good cache hit/cache miss ratio.
+</p>
+
+<p>
+Simulations can be used to determine the efficacity of a cache.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org90e76c6">
+<h3 id="org90e76c6">How to test cache efficacity?</h3>
+<p>
+Prototype in software can be a solution.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org660cb2b">
+<h3 id="org660cb2b">Cache design</h3>
+<p>
+Two variables: depth and range.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org731f45d">
+<h2 id="org731f45d">Cache results on SAT competitions benchmarks</h2>
+<div class="outline-text-2" id="text-org731f45d">
+</div>
+</section>
+</section>
+<section>
+<section id="slide-org5b3deb3">
+<h3 id="org5b3deb3">MiniSAT</h3>
+<p>
+MiniSAT is a minimalistic SAT solver.
+</p>
+
+<p>
+Written is C++.
+</p>
+
+<p>
+Well documented and well designed, easy to modify.
+</p>
+
+<p>
+Perfect for playing around.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org75a388a">
+<h4 id="org75a388a">How to use it?</h4>
+<pre  class="example">
+minisat [options] [input-file]
+</pre>
+
+<p>
+The input file is the SAT problem in CNF format.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orga38468f">
+<h4 id="orga38468f">CNF files</h4>
+<pre  class="example">
+c Here is a comment.
+p cnf 5 3
+1 -5 4 0
+-1 5 3 4 0
+-3 -4 0
+</pre>
+
+</section>
+</section>
+<section>
+<section id="slide-orgb3b38c2">
+<h3 id="orgb3b38c2">MiniSAT and cache simulation</h3>
+<div class="outline-text-3" id="text-orgb3b38c2">
+</div>
+</section>
+</section>
+<section>
+<section id="slide-orgc045cc9">
+<h4 id="orgc045cc9">Use MiniSAT as simulation engine</h4>
+<p>
+The goal is:
+</p>
+
+<ul>
+<li>to hook on the <code>propagate</code> part of MiniSAT</li>
+<li>to output the results at the end of the resolution</li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-orga6b9f7a">
+<h4 id="orga6b9f7a">Hooks on <code>propagate()</code></h4>
+<div class="org-src-container">
+
+<pre  class="src src-c++"><code trim><span style="color: #ce537a; font-weight: bold;">CRef</span> <span style="color: #a45bad;">Solver</span>::<span style="color: #bc6ec5; font-weight: bold;">propagate</span><span style="color: #4f97d7;">()</span>
+<span style="color: #4f97d7;">{</span>
+    <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">...</span>
+
+    <span style="color: #4f97d7; font-weight: bold;">while</span> <span style="color: #bc6ec5;">(</span>qhead &lt; trail.size<span style="color: #2d9574;">()</span><span style="color: #bc6ec5;">)</span> <span style="color: #bc6ec5;">{</span>
+        <span style="color: #ce537a; font-weight: bold;">Lit</span>            <span style="color: #7590db;">p</span>   = trail<span style="color: #2d9574;">[</span>qhead++<span style="color: #2d9574;">]</span>;     <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">'p' is enqueued fact to propagate.</span>
+        cache_sim.submit<span style="color: #2d9574;">(</span>p.x<span style="color: #2d9574;">)</span>;
+
+        <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">...</span>
+    <span style="color: #bc6ec5;">}</span>
+
+    <span style="color: #2aa1ae; background-color: #292e34;">// </span><span style="color: #2aa1ae; background-color: #292e34;">...</span>
+<span style="color: #4f97d7;">}</span>
+</code></pre>
+</div>
+
+</section>
+</section>
+<section>
+<section id="slide-orgffb470d">
+<h3 id="orgffb470d">Dataset</h3>
+<p>
+SAT competition 2018 benchmarks were used.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org1ed5b0d">
+<h3 id="org1ed5b0d">Results</h3>
+<p>
+Results swing from 0% to 99%.
+</p>
+
+<p>
+Very variable between benchmarks.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org4838f84">
+<h2 id="org4838f84">Cache results for specialized SAT problems</h2>
+<p>
+Hypothesis: similar problems share similar structure.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orgefd4222">
+<h3 id="orgefd4222">Specialized SAT problems</h3>
+<p>
+We will choose symbolic execution as an example of group of similar SAT problems.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org3b3216d">
+<h4 id="org3b3216d">Symbolic execution</h4>
+<p>
+Symbolic execution: problem of determining what inputs cause the execution of each branch of a program.
+</p>
+
+<p>
+Useful for fuzzy testing and reverse engineering.
+</p>
+
+<p>
+SAT solving is used to resolve this type of problem.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org35e9b9f">
+<h3 id="org35e9b9f">How to test?</h3>
+<p>
+Symbolic execution softwares use SMT solvers as backend.
+</p>
+
+<ul>
+<li>SMT solvers uses SAT solvers as backend.</li>
+<li>Let's hook in the backend SAT solver.</li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-orgfd570e8">
+<h3 id="orgfd570e8">Simulation with angr and z3</h3>
+<div class="outline-text-3" id="text-orgfd570e8">
+</div>
+</section>
+</section>
+<section>
+<section id="slide-orgf29ddf6">
+<h4 id="orgf29ddf6">What is angr?</h4>
+<p>
+<code>angr</code>: python library for analyzing binaries.
+</p>
+
+<ul>
+<li>Symbolic execution is of its features.</li>
+<li>Uses <code>z3</code> as backend for solving SMT.</li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-org39d3f37">
+<h4 id="org39d3f37">What is z3?</h4>
+<p>
+<code>z3</code> is a theorem prover.
+</p>
+
+<p>
+It can solve SMT problems using an intern SAT solver.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org7cd6bd9">
+<h4 id="org7cd6bd9">Method</h4>
+<p>
+Same as MiniSAT, let's hook in the SAT solver.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org468d598">
+<h4 id="org468d598">z3's SAT solver hooks</h4>
+<p>
+Very similar to MiniSAT.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orge2f121f">
+<h4 id="orge2f121f">Problem</h4>
+<p>
+<code>z3</code> is doing too much dark magic without using SAT solver.
+</p>
+
+<p>
+SAT solving use can be forced, but it's hard to configure when used as backend.
+</p>
+
+<p>
+Solutions:
+</p>
+
+<ul>
+<li>Push harder</li>
+<li>Find another tool</li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-orgd2f0c0d">
+<h3 id="orgd2f0c0d">Simulation with KLEE and STP</h3>
+<div class="outline-text-3" id="text-orgd2f0c0d">
+</div>
+</section>
+</section>
+<section>
+<section id="slide-orge753b9e">
+<h4 id="orge753b9e">What is KLEE?</h4>
+<p>
+KLEE: symbolic execution tool for generating tests.
+</p>
+
+<p>
+KLEE uses STP as backend for SMT solving.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-org27c695c">
+<h4 id="org27c695c">What is STP?</h4>
+<p>
+STP is a SMT solver that uses MiniSAT as backend for SAT solving.
+</p>
+
+<p>
+It strictly converts SMT problems into SAT problems.
+</p>
+
+<p>
+No dark magic.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orgd492046">
+<h4 id="orgd492046">Method</h4>
+<p>
+We hook in MiniSAT.
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orgcf36633">
+<h4 id="orgcf36633">Results</h4>
+<p>
+KLEE does a lot of little SMT resolutions:
+</p>
+
+<p>
+~500 variable inferences by problem.
+</p>
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-right" />
+
+<col  class="org-left" />
+
+<col  class="org-left" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-right">Range</th>
+<th scope="col" class="org-left">Cache hits %</th>
+<th scope="col" class="org-left">Comments</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-right">0</td>
+<td class="org-left">~15%</td>
+<td class="org-left">Lot of 0%, but ~30% otherwise</td>
+</tr>
+
+<tr>
+<td class="org-right">1</td>
+<td class="org-left">~40%</td>
+<td class="org-left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="org-right">2</td>
+<td class="org-left">~60%</td>
+<td class="org-left">&#xa0;</td>
+</tr>
+
+<tr>
+<td class="org-right">3</td>
+<td class="org-left">~75%</td>
+<td class="org-left">&#xa0;</td>
+</tr>
+</tbody>
+</table>
+
+</section>
+</section>
+<section>
+<section id="slide-org3ccd0a7">
+<h2 id="org3ccd0a7">Conclusion</h2>
+<ul>
+<li>Caching clauses is not stable when used with random problems.</li>
+<li>Caching clause fetching may be efficient in some specific cases.</li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-org0796725">
+<h3 id="org0796725">Bibliography</h3>
+<p>
+J. D. Davis, Zhangxi Tan, Fang Yu and Lintao Zhang, "A practical reconfigurable hardware accelerator for boolean satisfiability solvers," 2008 45th ACM/IEEE Design Automation Conference, Anaheim, CA, 2008, pp. 780-785.
+</p>
+
+<p>
+Davis J.D., Tan Z., Yu F., Zhang L. (2008) Designing an Efficient Hardware Implication Accelerator for SAT Solving. In: Kleine Büning H., Zhao X. (eds) Theory and Applications of Satisfiability Testing – SAT 2008. SAT 2008. Lecture Notes in Computer Science, vol 4996. Springer, Berlin, Heidelberg
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orgc4a331a">
+<h3 id="orgc4a331a">Questions?</h3>
+
+</section>
+</section>
+<section>
+<section id="slide-org4fcfa6a">
+<h3 id="org4fcfa6a">Thank you!</h3>
+</section>
+</section>
+</div>
+</div>
+<p> Created by Maxence CARON--LASNE. </p>
+<script src="./reveal.js/js/reveal.js"></script>
+
+<script>
+// Full list of configuration options available here:
+// https://github.com/hakimel/reveal.js#configuration
+Reveal.initialize({
+
+controls: false,
+progress: true,
+history: false,
+center: true,
+slideNumber: 'c',
+rollingLinks: true,
+keyboard: true,
+overview: true,
+width: 1200,
+height: 800,
+margin: 0.10,
+minScale: 0.50,
+maxScale: 2.50,
+
+theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+transition: Reveal.getQueryHash().transition || 'linear', // default/cube/page/concave/zoom/linear/fade/none
+transitionSpeed: 'default',
+multiplex: {
+    secret: '', // null if client
+    id: '', // id, obtained from socket.io server
+    url: '' // Location of socket.io server
+},
+
+// Optional libraries used to extend on reveal.js
+dependencies: [
+ { src: './reveal.js/plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+ { src: './reveal.js/plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+ { src: './reveal.js/plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }]
+});
+</script>
+</body>
+</html>
